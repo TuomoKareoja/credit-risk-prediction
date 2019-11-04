@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 from dotenv import find_dotenv, load_dotenv
+from src.features.make_features import add_perc_credit_used_and_change
 
 
 def main():
@@ -75,6 +76,17 @@ def main():
 
     logger.info("Saving as clean.csv to data/processed")
     df.to_csv(os.path.join("data", "processed", "clean.csv"))
+
+    print()
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    print("+++++++++++++++ Feature Engineering ++++++++++++++++++++++")
+    print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    print()
+    logger.info("Creating columns for percentage of credit used and change in this")
+    df = add_perc_credit_used_and_change(df)
+
+    logger.info("Saving as clean.csv to data/processed")
+    df.to_csv(os.path.join("data", "processed", "processed.csv"))
 
 
 if __name__ == "__main__":
