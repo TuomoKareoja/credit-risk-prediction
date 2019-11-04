@@ -8,6 +8,8 @@ import numpy as np
 from dotenv import find_dotenv, load_dotenv
 from src.features.make_features import add_perc_credit_used_and_change
 
+random_state = 123
+
 
 def main():
     """ Runs data processing scripts to turn raw data from (../raw) into
@@ -85,8 +87,13 @@ def main():
     logger.info("Creating columns for percentage of credit used and change in this")
     df = add_perc_credit_used_and_change(df)
 
-    logger.info("Saving as clean.csv to data/processed")
-    df.to_csv(os.path.join("data", "processed", "processed.csv"))
+    logger.info("Separating the validation set")
+    validation = df.sample(frac=0.2, random_state=random_state)
+    training = df[~df.index.isin(validation.index)]
+
+    logger.info("Saving as training and validation dataset to data/processed")
+    validation.to_csv(os.path.join("data", "processed", "validation.csv"))
+    training.to_csv(os.path.join("data", "processed", "training.csv"))
 
 
 if __name__ == "__main__":
