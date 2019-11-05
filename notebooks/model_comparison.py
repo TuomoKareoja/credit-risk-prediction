@@ -8,7 +8,6 @@ import pandas as pd
 import scikitplot as skplt
 import seaborn as sns
 from IPython.core.interactiveshell import InteractiveShell
-from matplotlib import pyplot as plt
 from sklearn.calibration import calibration_curve
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
