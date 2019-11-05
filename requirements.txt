@@ -15,7 +15,7 @@ statsmodels
 joblib
 xgboost
 tpot
-shap
+scikit-plot
 matplotlib>=3.0,<3.1
 seaborn>=0.9,<1.0
 python-dotenv>=0.5.1
