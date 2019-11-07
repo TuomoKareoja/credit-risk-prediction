@@ -104,3 +104,6 @@ target/
 *.nav
 *.out
 *.xwm
+
+# general temp files
+*.tmp
