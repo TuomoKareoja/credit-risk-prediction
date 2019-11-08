@@ -107,3 +107,6 @@ target/
 
 # general temp files
 *.tmp
+
+# catboost files
+/catboost_info/*

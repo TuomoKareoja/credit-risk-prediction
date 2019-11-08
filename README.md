@@ -39,9 +39,6 @@ Project Organization
     │   │
     │   ├── features       <- Scripts to turn raw data into features for modeling
     │   │
-    │   ├── models         <- Scripts to train models and then use trained models to make
-    │   │                     predictions
-    │   │
     │   └── visualization  <- Scripts to create exploratory and results oriented visualizations
     │
     └── tox.ini            <- tox file with settings for running tox; see tox.testrun.org
