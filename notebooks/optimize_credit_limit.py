@@ -2,11 +2,34 @@
 
 # # Finding Customers Where We Should Limit Credit Limit
 #
-# Lowering the credit limit for customers that have too high credit limits
-# should mean that the number of defaults goes down
-
+# Just finding the customers that are about to default is not enough,
+# because in the end we would like to prevent defaults from happening
+# and even if a customer has a high immediate risk of default we might
+# not have any leverage to change her behavior at this point. Where
+# we would have leverage is in the moment when we are setting
+# the customers credit limit before things escalated.
+#
+# If we could find customers where giving them a lower credit limit
+# would prevent their future default by preventing them from taking
+# a loan that too big for them to handle, we would have an option
+# to act on these predictions.
+#
+# The data that we have pertains to the immediate risk of defaulting,
+# but we can use this data to simulate a situation where we are
+# setting the customers their credit limits (probably years before the possible
+# default) by just considering the demographic information of the customer.
+#
+# Because the data that we use is so limited we would predict that
+# the results will not be spectacular, but this should be seen more
+# as a proof of concept. If we can find customers where the credit
+# limit should be lower and also find how much lower the limit should
+# be only with this limited dataset, we can be sure that with a richer
+# dataset containing all the variables that we actually use when
+# making decisions about credit limit we can create a valuable
+# tool for preventing defaults.
 
 # %% Loading packages
+
 import os
 
 import matplotlib.pyplot as plt
@@ -30,8 +53,22 @@ from src.optimization.credit_limit import (
 # Setting styles
 InteractiveShell.ast_node_interactivity = "all"
 sns.set(style="whitegrid", color_codes=True, rc={"figure.figsize": (12.7, 9.27)})
+# we don't want to have dark background in our saved plots
+matplotlib.rcParams.update(_VSCode_defaultMatplotlib_Params)
 
 random_state = 123
+
+# %% [markdown]
+
+# # Loading the Data and Choosing Columns
+#
+# We only keep demographic factors + credit limit and if the customer defaulted
+# * sex
+# * age
+# * education
+# * marital status
+# * credit given
+# * default
 
 # %% Load data
 
@@ -40,31 +77,7 @@ df_validation = pd.read_csv(
     os.path.join("data", "processed", "validation.csv"), index_col="ID"
 )
 
-# %%
-
-# Keeping only columns that don't contain absolute pay figures except for
-# credit given (trying to give it some meaning)
-
-cols = [
-    "credit_given",
-    "sex",
-    "education",
-    "marriage",
-    "age",
-    "defaulted",
-    "perc_credit_used1",
-    "perc_credit_used2",
-    "perc_credit_used3",
-    "perc_credit_used4",
-    "perc_credit_used5",
-    "perc_credit_used6",
-    "perc_credit_change1",
-    "perc_credit_change2",
-    "perc_credit_change3",
-    "perc_credit_change4",
-    "perc_credit_change5",
-]
-
+cols = ["credit_given", "sex", "education", "marriage", "age", "defaulted"]
 
 df = df[cols]
 df_validation = df_validation[cols]
@@ -85,11 +98,28 @@ y_validation = df_validation["defaulted"]
 
 # %% [markdown]
 
-# ## Credit Limit Affects the Default Probability
+# # Credit Limit Affects the Default Probability
 #
-# * If we drop credit limit from the features the power of the model suffers a lot
-# * Shapley values also show that the highest influences (wide spread) in the
-# predictions from low and high credit limits
+# Building a XGBoost model with the credit limit included or not, we see that
+# dropping the credit limit leads significantly worse model measured by ROC AUC
+#
+# Checking the the Shapley value summary of the model with credit limit
+# included shows us that credit limit is the feature with the highest influence.
+# It also shows unfortunately shows that for most customers the model
+# predicts lower defaulting risk for customers with higher credit limits.
+# This does not of course make sense and is because significantly more
+# information than just the demographic information that we use here
+# went into to choosing the credit limit. This means that the credit limit
+# comes with lots of information about the customer baked in that we otherwise
+# have no access to. This should not happen if we would have access to more
+# information about the customer and could better distinguish the effect of the
+# credit limit and the factors that affect the how high the credit limit was
+# set.
+#
+# Even though the credit though the model would predict that a higher credit
+# limit would prevent defaults, this should not be the case for all customers
+# we would like to find the customer groups that even with the limited amount
+# of demographic data available have a credit limit that seems too high.
 
 # %%
 
@@ -136,16 +166,31 @@ shap_values = explainer.shap_values(X_train)
 # visualize the training set predictions
 shap.summary_plot(shap_values, X_train)
 
+# %%
+
 # %% [markdown]
 
-# # Training Multiple Models to Predict Default
+# # Training Models
 #
-# * We try training extreme gradient boosting, random forest and catboost
-# * Model need to have good lift for its most extreme prediction, but not the whole way
-# (we only need to find a small fraction of the defaulters to make things better)
-
-# Visualize how the models create their predictions with shap
-# Create out of sample predictions with different levels of credit
+# We want to the best model to predict defaulting with the data that we have.
+# We try three different models: XGBoost, random forest and CatBoost.
+#
+# On top of the
+# overall AUC of the model we are interested in the Lift curve of the models.
+# This is because we would most likely end up targeting the credit limits of customers
+# that have a high change of defaulting and it is possible that a model would quite
+# inaccurate overall, but would be extremely good for finding a small proportion of
+# the defaulters. This kind of model would be better for our purposes.
+#
+# The last metric that we are interested in is how well the predicted probabilities
+# of the models are tuned. We need these to closely match reality as if this
+# is not the case the futher calculations about how the lowering the credit
+# limit would lower the change of defaulting would not be on solid ground.
+#
+# We train the models on training data and then calculate all the metrics
+# with a separate holdout set that we have not used before this. This makes
+# our metrics align closely with performance that we should expect if we would
+# apply the models to unseen new data.
 
 # %%
 
@@ -180,7 +225,6 @@ cat_model = CatBoostClassifier(
     verbose=False,
     random_state=random_state,
 )
-
 
 # %%
 
@@ -222,15 +266,20 @@ skplt.metrics.plot_roc(
     ax=ax,
     cmap="Greens",
 )
+plt.savefig(os.path.join("reports", "figures", "roc_curves.png"))
 plt.show()
 
 # %% Lift
 
 skplt.metrics.plot_lift_curve(y_validation, xgb_pred, title="XGBoost Lift Curve")
-skplt.metrics.plot_lift_curve(y_validation, rf_pred, title="Random Forest Lift Curve")
-skplt.metrics.plot_lift_curve(y_validation, cat_pred, title="CatBoost Lift Curve")
+plt.savefig(os.path.join("reports", "figures", "xgboost_lift_curve.png"))
 plt.show()
-
+skplt.metrics.plot_lift_curve(y_validation, rf_pred, title="Random Forest Lift Curve")
+plt.savefig(os.path.join("reports", "figures", "randomforest_lift_curve.png"))
+plt.show()
+skplt.metrics.plot_lift_curve(y_validation, cat_pred, title="CatBoost Lift Curve")
+plt.savefig(os.path.join("reports", "figures", "catboost_lift_curve.png"))
+plt.show()
 
 # %% Checking that probabilities are tuned
 
@@ -257,26 +306,51 @@ ax.plot(
 )
 ax.plot(cat_mpv, cat_fop, linewidth=3, marker=".", markersize=18, label="CatBoost")
 plt.legend()
+plt.xlabel("Predicted Probability of Defaulting")
+plt.ylabel("Actual Chance of Defaulting")
 plt.title("Calibration plot")
+plt.savefig(os.path.join("reports", "figures", "calibration_plot.png"))
 plt.show()
 
-fig, ax = plt.subplots()
-sns.distplot(xgb_pred[:, 1], ax=ax, label="XGBoost")
-sns.distplot(rf_pred[:, 1], ax=ax, label="Random Forest")
-sns.distplot(cat_pred[:, 1], ax=ax, label="CatBoost")
-plt.title("Distribution of Out of Sample Predicted Probabilities")
-plt.legend()
-plt.show()
 
+# %% [markdown]
+
+# # Finding the Best Candidates for Lower Credit
+#
+# Next we create lots of possible scenarios of by lowering the credit limit of
+# customers by a percent amount. Then we predict the default probability of these
+# hypothetical cases with our previously trained models. By compating the predicted
+# default risks between the actual case and the hypothetical case we will can see
+# how the model predicts that changing the credit limit would affect the default
+# risk of each customer. Because we test multiple different credit limit
+# drops we can not just find the customers where dropping the credit limit would
+# be advantageous, but also see how much we should drop the credit for these
+# customers.
+#
+# After these calculations we optimize for each model the best way to drop
+# the credit defaulting rate with the minimum amount of credit limit change. We would
+# like to make us small as possible change to the sum of all credit given. This means
+# that we optimize for the biggest change in the percent change of defaulting per dollar
+# in credit lost. We don't just put the customers in order in with this metric, but also
+# it is likely that there multiply different sizes of credit limit drops for each
+# customer and we also consider these in our optimization.
+#
+# The end results of the analysis are two kinds of plots. One showing the drop of
+# predicted # defaults in percentage points versus the percentage of credit given
+# lost. The other graph shows the percentage of customers affected by type
+# (defaulters, non-defaulters and all customers). On the X-axis are the number
+# of steps of credit lowering taken. These are made in the optimized order
+# explained above that is calculated for each model separately. Each step usually
+# means targeting a new customer, but sometimes also dropping the credit limit
+# for a customer where the limit has already been dropped be before. This means
+# that, altough highly related, the number of steps does not relate to the number
+# of customers affected in a straightforward manner.
 
 # %% Calculating effects of limit credit
-
-# %%
 
 models = [xgb_model, rf_model, cat_model]
 model_names = ["XGBoost", "Random Forest", "CatBoost"]
 credit_limit_factors = np.around(np.arange(0.7, 0.90, 0.1), 2)
-
 
 for model_name, model in zip(model_names, models):
 
@@ -313,24 +387,67 @@ for model_name, model in zip(model_names, models):
 
     plt.plot(costs_df.defaults_prevented_perc, label="Defaults avoided")
     plt.plot(costs_df.credit_cost_perc, label="Cost in credit")
-    # plt.xlim([0, 1000])
-    # plt.ylim([0, 0.25])
+    plt.xlim([0, 1000])
     plt.title(model_name + ": Defaults Avoided vs Defaults Cost in Credit")
     plt.xlabel("Number of Steps of Credit Limiting")
     plt.ylabel("%")
     plt.legend()
+    plt.savefig(
+        os.path.join(
+            "reports", "figures", model_name.lower().strip() + "_defaults_vs_costs.png"
+        )
+    )
     plt.show()
 
     plt.plot(costs_df.customers_affected_perc, label="Customers affected")
     plt.plot(costs_df.defaulters_affected_perc, label="Defaulters affected")
     plt.plot(costs_df.non_defaulters_affected_perc, label="Non-defaulters affected")
-    # plt.xlim([0, 1000])
-    # plt.ylim([0, 25])
+    plt.xlim([0, 1000])
     plt.title(model_name + ": Proportion of Different Types of Customers affected")
     plt.xlabel("Number of Steps of Credit Limiting")
     plt.ylabel("%")
     plt.legend()
+    plt.savefig(
+        os.path.join(
+            "reports",
+            "figures",
+            model_name.lower().strip() + "_types_of_customers_affected.png",
+        )
+    )
     plt.show()
 
+# %% [markdown]
+
+# # Futher Exploration of CatBoost
+#
+# The CatBoost model seems to have the best results of the models. So we would
+# probably like to know a bit more about it. For this reason we plot the Shapley
+# values of this models. We see the familiar problem of higher credit limits
+# mostly predicting the lower default rates. We know though that this is not
+# the case for all customers as we would have not find any possibilities to
+# drop credit limits that lower the chance of defaulting in the previous step.
 
 # %%
+
+explainer = shap.TreeExplainer(cat_model)
+shap_values = explainer.shap_values(X_validation)
+
+# visualize the training set predictions
+sns.set(style="whitegrid", color_codes=True, rc={"figure.figsize": (12.7, 9.27)})
+
+fig = shap.summary_plot(shap_values, X_validation, show=False)
+plt.savefig(os.path.join("reports", "figures", "catboost_shap_all_features.png"))
+plt.show()
+
+# %% [markdown]
+
+# # Conclusions
+#
+# * The method for finding the customers where we should lower the credit limit
+# work in concept
+# * To do a proper of the viability of the concept we would need to have access to the
+# same variables that are used when the credit limit is decided for building the models
+# * The ultimate goal would be to create a system that could warn our employers when
+# they are about to approve a credit limit that is too big and suggest them a suitably
+# lower credit limit that is big enough to have a meaningfull effect on the probability
+# of default without denying the customer credit completely
