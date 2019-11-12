@@ -387,6 +387,7 @@ for model_name, model in zip(model_names, models):
 
     plt.plot(costs_df.defaults_prevented_perc, label="Defaults avoided")
     plt.plot(costs_df.credit_cost_perc, label="Cost in credit")
+    plt.ylim([0, 2])
     plt.xlim([0, 1000])
     plt.title(model_name + ": Defaults Avoided vs Defaults Cost in Credit")
     plt.xlabel("Number of Steps of Credit Limiting")
@@ -402,6 +403,7 @@ for model_name, model in zip(model_names, models):
     plt.plot(costs_df.customers_affected_perc, label="Customers affected")
     plt.plot(costs_df.defaulters_affected_perc, label="Defaulters affected")
     plt.plot(costs_df.non_defaulters_affected_perc, label="Non-defaulters affected")
+    plt.ylim([0, 30])
     plt.xlim([0, 1000])
     plt.title(model_name + ": Proportion of Different Types of Customers affected")
     plt.xlabel("Number of Steps of Credit Limiting")
@@ -436,6 +438,7 @@ shap_values = explainer.shap_values(X_validation)
 sns.set(style="whitegrid", color_codes=True, rc={"figure.figsize": (12.7, 9.27)})
 
 fig = shap.summary_plot(shap_values, X_validation, show=False)
+plt.tight_layout()
 plt.savefig(os.path.join("reports", "figures", "catboost_shap_all_features.png"))
 plt.show()
 
